@@ -8,12 +8,20 @@
 
 #include "hermes_protocols.h"
 
+void print_message(const char *msg) {
+    // save cursor position, clear line
+    printf("\r\033[K"); // clear current line
+    printf("Message from [%.24s]: %s\n", msg, msg + HEADER);
+    rl_on_new_line();       // tell readline cursor is on new line
+    rl_redisplay();         // redraw the prompt + current input
+}
+
 void *recv_handler(void *sock_desc) {
     int sock = *(int*)sock_desc;
     free(sock_desc);
     char buf[MESSAGE_MAX] = {0};
     while (recv_all(sock, buf, MESSAGE_MAX) > 0) {
-        printf("Message from [%.24s]: %s\n", buf, buf + HEADER);
+        print_message(buf);
         memset(buf, 0, MESSAGE_MAX);
     }
     printf("server disconnected\n");
@@ -88,8 +96,9 @@ int main() {
 
     while(true)
     {
-        char *msg = readline("");
+        char *msg = readline("Enter message: ");
         if (!msg || strcmp(msg, "quit") == 0) { free(msg); break; }
+        if (strlen(msg) == 0) { free(msg); continue; }
         if(strlen(msg) > MSG_BODY_SIZE) 
         {
             printf("Too long! Message must be 2048 characters or less\n");
@@ -102,7 +111,6 @@ int main() {
         strncpy(msg_payload + HEADER, msg, MSG_BODY_SIZE);
         send_all(sock, msg_payload, MESSAGE_MAX);
         free(msg);
-        printf("Sent to: %s\n", recipient);
     }
 
     close(sock);
