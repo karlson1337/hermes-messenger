@@ -1,3 +1,5 @@
+//Hermes messenger main server code.
+
 #include "../hermes_protocols.h"
 
 #include <signal.h>
@@ -51,10 +53,17 @@ bool authenticate(int sock, char username_out[USERNAME_SIZE]) {
     payload.username[USERNAME_SIZE-1] = '\0';
     payload.password[PASSWORD_SIZE-1] = '\0';
 
-    unsigned char temp_pk[crypto_sign_PUBLICKEYBYTES];
+    unsigned char temp_pk[crypto_box_PUBLICKEYBYTES];
 
     char stored_hash[crypto_pwhash_STRBYTES];
     uint8_t resp = 0;
+
+    if(Users.find(payload.username) != Users.end())
+    {
+        resp = 3;
+        send_all(sock, &resp, 1);
+        return false;
+    }
 
     if (!db_get_pwhash(payload.username, stored_hash)) {
 
@@ -75,9 +84,9 @@ bool authenticate(int sock, char username_out[USERNAME_SIZE]) {
     {
         if (crypto_pwhash_str_verify(stored_hash, payload.password, strlen(payload.password)) == 0) 
         {
-            unsigned char stored_pk[crypto_sign_PUBLICKEYBYTES];
+            unsigned char stored_pk[crypto_box_PUBLICKEYBYTES];
             if (!get_pubkey(payload.username, stored_pk) ||
-                memcmp(stored_pk, payload.pubkey, crypto_sign_PUBLICKEYBYTES) != 0)
+                memcmp(stored_pk, payload.pubkey, crypto_box_PUBLICKEYBYTES) != 0)
             {
                 printf("pubkey mismatch for: %s\n", payload.username);
                 send_all(sock, &resp, 1);
@@ -142,7 +151,7 @@ void *connection_handler(void *socket_desc) {
         if(buf[0] == TYPE_FRIENDADD)
         {
             char temp[MESSAGE_MAX + crypto_box_SEALBYTES] = {0};
-            unsigned char temp_pk[crypto_sign_PUBLICKEYBYTES];
+            unsigned char temp_pk[crypto_box_PUBLICKEYBYTES];
             strncpy(temp+1, "server", 6);
             printf("looking up pubkey for: [%s]\n", recipient);
             if(!get_pubkey(recipient, temp_pk)) 
@@ -155,7 +164,7 @@ void *connection_handler(void *socket_desc) {
             temp[0] = TYPE_FRIENDADD;
 
             strncpy(temp+TYPE_BYTE+USERNAME_SIZE, recipient, USERNAME_SIZE);
-            memcpy(temp + HEADER, temp_pk, crypto_sign_PUBLICKEYBYTES);
+            memcpy(temp + HEADER, temp_pk, crypto_box_PUBLICKEYBYTES);
             send_all(u->sock, temp, MESSAGE_MAX + crypto_box_SEALBYTES);
             continue;
         }

@@ -1,5 +1,8 @@
+//Hermes client databases code.
+
 #include "globals.h"
 #include "function_defs.h"
+#include <readline/readline.h>
 
 //========CHAT HISTORY DATABASE CODE========
 
@@ -63,7 +66,7 @@ bool chatdb_open(const char *password) {
         "  recipient TEXT    NOT NULL,"
         "  content   TEXT    NOT NULL"
         ");",
-        NULL, NULL, NULL) == SQLITE_OK ? 0 : -1;
+        NULL, NULL, NULL) == SQLITE_OK ? true : false;
 }
 
 bool chatdb_insert(const char *sender, const char *recipient, int64_t timestamp, const char *content) {
@@ -113,7 +116,6 @@ void chatdb_close(void) {
 }
 
 //========FRIEND DATABASE CODE========
-
 
 void friend_db_init()
 {

@@ -60,6 +60,8 @@ The server will prompt for a port (default: `8080`). User identities and passwor
 
 ### Client
 
+Run the client (in `bib/client`):
+
 ```bash
 ./hermes_client
 ```

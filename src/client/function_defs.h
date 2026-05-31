@@ -1,3 +1,5 @@
+//Hermes client function definitions.
+
 #pragma once
 
 #include "../hermes_protocols.h"

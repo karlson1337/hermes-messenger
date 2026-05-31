@@ -1,3 +1,5 @@
+//Hermes server database code.
+
 #include "../hermes_protocols.h"
 
 extern sqlite3 *db;
