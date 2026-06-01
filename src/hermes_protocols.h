@@ -11,7 +11,7 @@
 #include <time.h>
 
 #define USERNAME_SIZE 25
-#define PASSWORD_SIZE 64
+#define PASSWORD_SIZE 65
 
 #define TYPE_BYTE 1
 #define TYPE_MESSAGE 0

@@ -97,8 +97,8 @@ bool command(const char *msg)
         }
         char temp[MESSAGE_MAX] = {0};
         temp[0] = 1;
-        strncpy(temp+1, self, USERNAME_SIZE);
-        strncpy(temp+1+USERNAME_SIZE, arg, USERNAME_SIZE);
+        memcpy(temp+1, self, USERNAME_SIZE);
+        memcpy(temp+1+USERNAME_SIZE, arg, USERNAME_SIZE);
         send_all(sock, temp, MESSAGE_MAX+crypto_box_SEALBYTES);
         printf("Added user.\n");
         return true;
@@ -317,7 +317,20 @@ int main()
     pthread_t recv_thread;
     int *sock_ptr = (int*)malloc(sizeof(int));
     *sock_ptr = sock;
-    pthread_create(&recv_thread, NULL, recv_handler, sock_ptr);
+
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 96 * 1024);
+
+    if(pthread_create(&recv_thread, NULL, recv_handler, sock_ptr) < 0)
+    {
+        perror("error creating receiving handler");
+        close(*sock_ptr);
+        free(sock_ptr);
+        pthread_attr_destroy(&attr);
+        chatdb_close();
+        return 0;
+    }
 
     printf("\n===============================================\n\n");
     printf("You may send messages now! (press enter to send).\nFor a list of available commands, type /help\n");

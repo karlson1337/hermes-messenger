@@ -88,7 +88,7 @@ bool authenticate(int sock, char username_out[USERNAME_SIZE]) {
             if (!get_pubkey(payload.username, stored_pk) ||
                 memcmp(stored_pk, payload.pubkey, crypto_box_PUBLICKEYBYTES) != 0)
             {
-                printf("pubkey mismatch for: %s\n", payload.username);
+                printf("Pubkey mismatch for: %s\n", payload.username);
                 send_all(sock, &resp, 1);
                 return false;
             }
@@ -139,8 +139,6 @@ void *connection_handler(void *socket_desc) {
     Users[u->username] = u;
     pthread_mutex_unlock(&table_mutex);
 
-    printf("client [%s] logged in\n", username);
-
     while (1) {
         char buf[MESSAGE_MAX+crypto_box_SEALBYTES] = {0};
         if (recv_all(sock, buf, MESSAGE_MAX+crypto_box_SEALBYTES) <= 0) break;
@@ -153,7 +151,6 @@ void *connection_handler(void *socket_desc) {
             char temp[MESSAGE_MAX + crypto_box_SEALBYTES] = {0};
             unsigned char temp_pk[crypto_box_PUBLICKEYBYTES];
             strncpy(temp+1, "server", 6);
-            printf("looking up pubkey for: [%s]\n", recipient);
             if(!get_pubkey(recipient, temp_pk)) 
             {
                 temp[0] = TYPE_404;
@@ -175,7 +172,6 @@ void *connection_handler(void *socket_desc) {
         if(Users.find(std::string(recipient)) == Users.end()) 
         {
             pthread_mutex_unlock(&table_mutex);
-            printf("recipient offline\n");
             continue;
         }
         temp_fd = (Users[std::string(recipient)])->sock;
@@ -258,15 +254,21 @@ int main() {
         new_fd = (int*)malloc(sizeof(int));
         *new_fd = client_fd;
 
-        if (pthread_create(&listener_thread, NULL, connection_handler, (void*)new_fd) < 0) 
+        pthread_attr_t attr;
+        pthread_attr_init(&attr);
+        pthread_attr_setstacksize(&attr, 96 * 1024); //set stack size to 96kb (default 8mb is way too much)
+
+        if (pthread_create(&listener_thread, &attr, connection_handler, (void*)new_fd) < 0) 
         {
             perror("error creating new thread");
             close(*new_fd);
             free(new_fd);
             if (errno == EAGAIN) { fprintf(stderr, "server might be under high load.\n"); }
+            pthread_attr_destroy(&attr);
             continue;
         }
         pthread_detach(listener_thread);
+        pthread_attr_destroy(&attr);
     }
     return 0;
 }

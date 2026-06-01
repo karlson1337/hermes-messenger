@@ -10,10 +10,10 @@ void store_private_key(const unsigned char *sk, const char *password)
     randombytes_buf(salt, sizeof(salt));
     if(crypto_pwhash(wrapping_key, sizeof(wrapping_key),
         password, strlen(password), salt,
-        crypto_pwhash_OPSLIMIT_INTERACTIVE,
-        crypto_pwhash_MEMLIMIT_INTERACTIVE,
+        crypto_pwhash_OPSLIMIT_MODERATE,
+        crypto_pwhash_MEMLIMIT_MODERATE,
         crypto_pwhash_ALG_DEFAULT) != 0) 
-        { /* OOM */ sodium_memzero(wrapping_key, crypto_secretbox_KEYBYTES); return; }
+        { /* OOM */ fprintf(stderr, "Out of memory hashing password\n"); sodium_memzero(wrapping_key, crypto_secretbox_KEYBYTES); return; }
 
     unsigned char nonce[crypto_secretbox_NONCEBYTES];
     unsigned char ciphertext[crypto_secretbox_MACBYTES + crypto_box_SECRETKEYBYTES];
@@ -31,7 +31,7 @@ void store_private_key(const unsigned char *sk, const char *password)
     fclose(f);
     chmod(path, 0600);
 
-    sodium_memzero(wrapping_key, sizeof(wrapping_key));
+    sodium_memzero(wrapping_key, crypto_secretbox_KEYBYTES);
 }
 
 bool load_private_key(unsigned char *sk_out, const char *password) 
@@ -44,28 +44,32 @@ bool load_private_key(unsigned char *sk_out, const char *password)
     unsigned char salt[crypto_pwhash_SALTBYTES];
     unsigned char nonce[crypto_secretbox_NONCEBYTES];
     unsigned char ciphertext[crypto_secretbox_MACBYTES + crypto_box_SECRETKEYBYTES];
-    fread(salt,       1, sizeof(salt),       f);
-    fread(nonce,      1, sizeof(nonce),       f);
-    fread(ciphertext, 1, sizeof(ciphertext),  f);
+    if (fread(salt,       1, sizeof(salt),       f) != sizeof(salt)       ||
+    fread(nonce,      1, sizeof(nonce),       f) != sizeof(nonce)      ||
+    fread(ciphertext, 1, sizeof(ciphertext),  f) != sizeof(ciphertext))
+    {
+        fclose(f);
+        return false;
+    }
     fclose(f);
 
     unsigned char wrapping_key[crypto_secretbox_KEYBYTES];
     if(crypto_pwhash(wrapping_key, sizeof(wrapping_key),
         password, strlen(password), salt,
-        crypto_pwhash_OPSLIMIT_INTERACTIVE,
-        crypto_pwhash_MEMLIMIT_INTERACTIVE,
+        crypto_pwhash_OPSLIMIT_MODERATE,
+        crypto_pwhash_MEMLIMIT_MODERATE,
         crypto_pwhash_ALG_DEFAULT) != 0)
-        { sodium_memzero(wrapping_key, crypto_secretbox_KEYBYTES); return false; }
+        {/* OOM */ fprintf(stderr, "Out of memory hashing password\n"); sodium_memzero(wrapping_key, crypto_secretbox_KEYBYTES); return false; }
 
     bool ok = crypto_secretbox_open_easy(sk_out, ciphertext, sizeof(ciphertext),
                                           nonce, wrapping_key) == 0;
-    sodium_memzero(wrapping_key, sizeof(wrapping_key));
+    sodium_memzero(wrapping_key, crypto_secretbox_KEYBYTES);
     return ok;
 }
 
 void get_credentials()
 {
-    printf("enter username (max 24 characters): ");
+    printf("Enter username (max 24 characters): ");
     scanf("%24s", self);
     { int c; while ((c = getchar()) != '\n' && c != EOF); }
 
@@ -77,12 +81,12 @@ void get_credentials()
 
     size_t pwlen;
     do {
-        printf("enter password (8-64 characters): ");
+        printf("Enter password (8-64 characters): ");
         fgets(password, PASSWORD_SIZE, stdin);
         password[strcspn(password, "\n")] = '\0';
         pwlen = strlen(password);
-        if (pwlen < 8)  printf("\npassword too short.\n");
-        if (pwlen > 64) printf("\npassword too long.\n");
+        if (pwlen < 8)  printf("\nPassword too short.\n");
+        if (pwlen > 64) printf("\nPassword too long.\n");
     } while (pwlen < 8 || pwlen > 64);
     tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
@@ -136,13 +140,13 @@ bool authenticate()
         close(sock);
         return false;
     }
-    else if (resp == 1) { chatdb_open(password); sodium_memzero(password, strlen(password));
+    else if (resp == 1) { chatdb_open(password); sodium_memzero(password, PASSWORD_SIZE);
         printf("Logged in successfully!\n"); return true; } 
-    else if (resp == 2) {chatdb_open(password); sodium_memzero(password, strlen(password));
+    else if (resp == 2) {chatdb_open(password); sodium_memzero(password, PASSWORD_SIZE);
         printf("Registered successfully as a new user!\n"); return true; }
-    else if (resp == 3) {printf("Already logged in from another client.\n"); sodium_memzero(password, strlen(password));
+    else if (resp == 3) {printf("Already logged in from another client.\n"); sodium_memzero(password, PASSWORD_SIZE);
         return false; }
-    else {printf("Unknown error.\n"); sodium_memzero(password, strlen(password));
+    else {printf("Unknown error.\n"); sodium_memzero(password, PASSWORD_SIZE);
         return false; }
 
 }
