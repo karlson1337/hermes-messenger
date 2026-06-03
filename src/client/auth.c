@@ -114,8 +114,8 @@ bool authenticate()
     }
 
     auth_payload payload = {0};
-    strncpy(payload.username, self, USERNAME_SIZE-1);
-    strncpy(payload.password, password, PASSWORD_SIZE-1);
+    memcpy(payload.username, self, USERNAME_SIZE-1);
+    memcpy(payload.password, password, PASSWORD_SIZE-1);
     memcpy(payload.pubkey, self_pk, crypto_box_PUBLICKEYBYTES);
 
     size_t cipher_len = sizeof(auth_payload) + crypto_box_SEALBYTES;

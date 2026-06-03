@@ -4,6 +4,9 @@
 #include "function_defs.h"
 #include <readline/readline.h>
 
+#define COLOR_NOTIFY "\033[33m"
+#define COLOR_RESET    "\033[0m"
+
 //========CHAT HISTORY DATABASE CODE========
 
 bool derive_db_key(const char *password, const uint8_t *salt, char *hex_key_out) {
@@ -69,7 +72,7 @@ bool chatdb_open(const char *password) {
         NULL, NULL, NULL) == SQLITE_OK ? true : false;
 }
 
-bool chatdb_insert(const char *sender, const char *recipient, int64_t timestamp, const char *content) {
+bool chatdb_insert(const char *sender, const char *recipient, int64_t timestamp, const unsigned char *content) {
     sqlite3_stmt *stmt;
     const char *sql = "INSERT INTO messages(timestamp,sender,recipient,content) VALUES(?,?,?,?);";
 
@@ -78,20 +81,23 @@ bool chatdb_insert(const char *sender, const char *recipient, int64_t timestamp,
     sqlite3_bind_int64(stmt, 1, timestamp);
     sqlite3_bind_text(stmt,  2, sender,    -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt,  3, recipient, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt,  4, content,   -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt,  4, (const char *)content,   -1, SQLITE_STATIC);
 
     bool rc = sqlite3_step(stmt) == SQLITE_DONE ? true : false;
     sqlite3_finalize(stmt);
     return rc;
 }
 
-bool chatdb_history(const char *user_a, const char *user_b, int limit,
-                   void (*cb)(int64_t ts, const char *sender, const char *msg, void *ud), void *ud) {
+bool chatdb_history(const char *user_a, const char *user_b, int limit, int offset,
+                   void (*cb)(int64_t ts, const char *sender, const unsigned char *msg, void *ud), void *ud) {
     sqlite3_stmt *stmt;
+    
     const char *sql =
-        "SELECT timestamp, sender, content FROM messages "
-        "WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?) "
-        "ORDER BY timestamp ASC LIMIT ?;";
+        "SELECT * FROM ("
+        "  SELECT timestamp, sender, content FROM messages "
+        "  WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?) "
+        "  ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        ") ORDER BY timestamp ASC;";
 
     if (sqlite3_prepare_v2(chat_db, sql, -1, &stmt, NULL) != SQLITE_OK) return false;
 
@@ -100,19 +106,34 @@ bool chatdb_history(const char *user_a, const char *user_b, int limit,
     sqlite3_bind_text(stmt, 3, user_b, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 4, user_a, -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt,  5, limit);
+    sqlite3_bind_int(stmt,  6, offset);
 
     while (sqlite3_step(stmt) == SQLITE_ROW)
         cb(sqlite3_column_int64(stmt, 0),
-           (const char *)sqlite3_column_text(stmt, 1),
-           (const char *)sqlite3_column_text(stmt, 2), ud);
+           (const char*)sqlite3_column_text(stmt, 1),
+           (const unsigned char *)sqlite3_column_text(stmt, 2), ud);
 
     sqlite3_finalize(stmt);
     return true;
 }
 
-void chatdb_close(void) {
-    sqlite3_close(chat_db);
-    chat_db = NULL;
+int chatdb_get_count(const char *user_a, const char *user_b) {
+    sqlite3_stmt *stmt;
+    const char *sql = "SELECT COUNT(*) FROM messages WHERE (sender=? AND recipient=?) OR (sender=? AND recipient=?);";
+    int count = 0;
+    
+    if (sqlite3_prepare_v2(chat_db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, user_a, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, user_b, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 3, user_b, -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 4, user_a, -1, SQLITE_STATIC);
+        
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return count;
 }
 
 //========FRIEND DATABASE CODE========
@@ -124,7 +145,7 @@ void friend_db_init()
     sqlite3_open(path, &friend_list);
     sqlite3_exec(friend_list,
         "CREATE TABLE IF NOT EXISTS friends "
-        "(username TEXT PRIMARY KEY, pubkey BLOB NOT NULL);",
+        "(username TEXT PRIMARY KEY, pubkey BLOB NOT NULL, unread INTEGER NOT NULL DEFAULT 0);",
         NULL, NULL, NULL);
 }
 
@@ -132,11 +153,13 @@ void friends_add(const char *username, const unsigned char *pubkey)
 {
     sqlite3_stmt *s;
     sqlite3_prepare_v2(friend_list,
-        "INSERT OR REPLACE INTO friends VALUES (?,?)", -1, &s, NULL);
+        "INSERT OR REPLACE INTO friends VALUES (?,?,?)", -1, &s, NULL);
     sqlite3_bind_text(s, 1, username, -1, SQLITE_STATIC);
     sqlite3_bind_blob(s, 2, pubkey, crypto_box_PUBLICKEYBYTES, SQLITE_STATIC);
+    sqlite3_bind_int(s,  3, 0);
     sqlite3_step(s);
     sqlite3_finalize(s);
+    ui_draw_friends();
 }
 
 bool friend_get_pubkey(const char *username, unsigned char *pubkey_out) 
@@ -151,16 +174,6 @@ bool friend_get_pubkey(const char *username, unsigned char *pubkey_out)
     return true;
 }
 
-void list_friends() 
-{
-    sqlite3_stmt *s;
-    sqlite3_prepare_v2(friend_list, "SELECT username FROM friends", -1, &s, NULL);
-    printf("friends:\n");
-    while (sqlite3_step(s) == SQLITE_ROW)
-        printf("  %s\n", sqlite3_column_text(s, 0));
-    sqlite3_finalize(s);
-}
-
 bool friend_exists(const char *username) 
 {
     sqlite3_stmt *s;
@@ -170,4 +183,24 @@ bool friend_exists(const char *username)
     bool exists = sqlite3_step(s) == SQLITE_ROW;
     sqlite3_finalize(s);
     return exists;
+}
+
+void friends_increment_unread(const char *username) {
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(friend_list,
+        "UPDATE friends SET unread = unread + 1 WHERE username=?", -1, &stmt, NULL);
+    sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    ui_draw_friends();
+}
+
+void friends_clear_unread(const char *username) {
+    sqlite3_stmt *stmt;
+    sqlite3_prepare_v2(friend_list,
+        "UPDATE friends SET unread = 0 WHERE username=?", -1, &stmt, NULL);
+    sqlite3_bind_text(stmt, 1, username, -1, SQLITE_STATIC);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    ui_draw_friends();
 }

@@ -3,16 +3,18 @@
 #include "../hermes_protocols.h"                   
 #include "function_defs.h"
 
-#include <readline/readline.h>
 #include <netinet/tcp.h>
 #include <sys/stat.h>
 #include <stdbool.h>
 #include <termios.h>
 
 #define COLOR_RECEIVED "\033[32m"
+#define COLOR_NOTIFY "\033[33m"
 #define COLOR_RESET    "\033[0m"
 
 #define COMMAND_SIZE 16
+
+#define MAX_HISTORY 200
 
 sqlite3 *friend_list = NULL;
 sqlite3 *chat_db = NULL;
@@ -30,46 +32,35 @@ char prompt[64];
 
 int sock;
 
-static const char *commands[] = 
+int chat_scroll_offset = 0;
+
+const char *commands[] = 
 {
     "/help   - show available commands",
     "/add    - add a friend: /add <username>",
-    "/list   - list friends",
-    "/open   - open a chat: /open <username>  [must be added to friends list beforehand]",
+    "/open   - open a chat with a friend: /open <username>]",
     "/quit   - disconnect and exit",
 };
-static const int NUM_COMMANDS = sizeof(commands) / sizeof(commands[0]);
+const int NUM_COMMANDS = sizeof(commands) / sizeof(commands[0]);
 
 //========MAIN FUNCTIONALITY CODE========
 
-void print_message(const char *sender, int64_t timestamp, const unsigned char *msg) 
-{
-    char buf[32];
-    struct tm *tm = localtime(&timestamp);
-    strftime(buf, sizeof(buf), "%b %d %H:%M", tm);
-    
-    printf("\r\033[2K");
-    printf("%s[%s] (%s): %s%s\n\n", COLOR_RECEIVED, buf, sender, msg, COLOR_RESET);
-    rl_on_new_line();
-    rl_redisplay();
-}
+static void print_history(int64_t timestamp, const char *sender, const unsigned char *msg, void *ud) {
+    ui_print_message(timestamp, sender, msg); }
 
-static void print_history(int64_t ts, const char *sender, const char *msg, void *ud) {
-    char timebuf[32];
-    struct tm *tm = localtime(&ts);
-    strftime(timebuf, sizeof(timebuf), "%H:%M %b %d", tm);
-    const char *display = strcmp(sender, self) == 0 ? "you" : sender;
-    const char *color = strcmp(sender, self) == 0 ? "" : COLOR_RECEIVED;
-    const char *reset = strcmp(sender, self) == 0 ? "" : COLOR_RESET;
-    printf("%s[%s] (%s): %s%s\n\n", color, timebuf, display, msg, reset);
+void redraw_chat() {
+    if (recipient[0] == '\0') return;
+    ui_clear_chat();
+    chatdb_history(self, recipient, MAX_HISTORY, chat_scroll_offset, print_history, NULL);
 }
 
 void open_chat(const char *new_recipient) {
-    strncpy(recipient, new_recipient, USERNAME_SIZE-1);
-
-    chatdb_history(self, recipient, 50, print_history, NULL);
-
-    snprintf(prompt, sizeof(prompt), "(to %s): ", recipient);
+    memcpy(recipient, new_recipient, USERNAME_SIZE);
+    friends_clear_unread(new_recipient);
+    ui_set_header(recipient);
+    ui_draw_friends();
+    chat_scroll_offset = 0;
+    redraw_chat(); // clears and renders with chatdb_history
 }
 
 bool command(const char *msg)
@@ -80,56 +71,39 @@ bool command(const char *msg)
 
     if(strcmp(sub, "help") == 0)
     {
-        for(int i = 0; i < NUM_COMMANDS; i++) printf("%s\n", commands[i]);
+        ui_show_help();
         return true;
     }
     if(strcmp(sub, "add") == 0)
     {
-        if(strcmp(arg, self) == 0) 
-        {
-            printf("You can't add yourself!\n");
-            return true;
-        }
-        if (friend_exists(arg)) 
-        {
-            printf("[%s] is already in your friends list\n", arg);
-            return true;
-        }
+        if (arg[0] == '\0') {return true;}
+        if(strcmp(arg, self) == 0) { return true; }
+        if (friend_exists(arg)) { return true; }
+
         char temp[MESSAGE_MAX] = {0};
         temp[0] = 1;
         memcpy(temp+1, self, USERNAME_SIZE);
         memcpy(temp+1+USERNAME_SIZE, arg, USERNAME_SIZE);
         send_all(sock, temp, MESSAGE_MAX+crypto_box_SEALBYTES);
-        printf("Added user.\n");
-        return true;
-    }
-    if(strcmp(sub, "list") == 0)
-    {
-        list_friends();
         return true;
     }
     if(strcmp(sub, "open") == 0)
     {
+        if (arg[0] == '\0') { return true; }
         unsigned char pubkey[crypto_box_PUBLICKEYBYTES];
 
-        if(strcmp(arg, self) == 0) 
-        {
-            printf("You can't chat with yourself.");
-            return true;
-        }
+        if(strcmp(arg, self) == 0) { return true; }
 
-        if (!friend_get_pubkey(arg, pubkey))
-        {
-            printf("User not in friends list, use /add <username> to add them.\n"); 
-            return true;
-        }
+        if (!friend_get_pubkey(arg, pubkey)){ return true; }
         open_chat(arg);
         return true;
     }
     if(strcmp(sub, "quit") == 0)
     {
+        ui_cleanup();
         close(sock);
-        chatdb_close();
+        sqlite3_close(chat_db);
+        sqlite3_close(friend_list);
         exit(0);
     }
     
@@ -149,12 +123,12 @@ void send_message(const char *msg)
 
     if (recipient[0] == '\0') 
     {
-        printf("No recipient set. Use /open <username> to start a chat\n");
+        ui_print_system_message("No recipient set. Use /open <username> to start a chat");
         return;
     }
 
     if(strlen(msg) > MSG_BODY_SIZE) {
-        printf("Too long! Message must be 2048 characters or less\n");
+        ui_print_system_message("Too long! Message must be 2048 characters or less");
         return;
     }
 
@@ -162,7 +136,7 @@ void send_message(const char *msg)
 
     if (!friend_get_pubkey(recipient, recipient_pk)) 
     {
-        printf("Recipient not in friends list.\n");
+        ui_print_system_message("Recipient not in friends list.");
         return;
     }
     
@@ -178,13 +152,10 @@ void send_message(const char *msg)
     crypto_box_seal(packet + HEADER, msgbuf, MSG_BODY_SIZE, recipient_pk);
 
     send_all(sock, packet, MESSAGE_MAX + crypto_box_SEALBYTES);
-    chatdb_insert(self, recipient, timestamp, (const char *)msg);
+    chatdb_insert(self, recipient, timestamp, (const unsigned char *)msg);
 
-    char buf[32];
-    struct tm *tm = localtime(&timestamp);
-    strftime(buf, sizeof(buf), "%b %d %H:%M", tm);
-
-    printf("[%s] (%s): %s\n\n", buf, "you", msg);
+    chat_scroll_offset = 0;
+    redraw_chat(); // re renders entire chat
 }
 
 void *recv_handler(void *sock_desc) 
@@ -192,7 +163,7 @@ void *recv_handler(void *sock_desc)
     int sock = *(int*)sock_desc;
     free(sock_desc);
 
-    char buf[MESSAGE_MAX+crypto_box_SEALBYTES] = {0};
+    unsigned char buf[MESSAGE_MAX+crypto_box_SEALBYTES] = {0};
 
     unsigned char plaintext[MSG_BODY_SIZE] = {0};
 
@@ -213,7 +184,7 @@ void *recv_handler(void *sock_desc)
             MSG_BODY_SIZE + crypto_box_SEALBYTES,
             self_pk, self_sk) != 0) 
             {
-                printf("Decryption failed");
+                ui_print_system_message("Decryption failed");
                 continue;
             }
         }
@@ -224,21 +195,34 @@ void *recv_handler(void *sock_desc)
 
         if(buf[0] == TYPE_ERROR || buf[0] == TYPE_404) 
         {
-            print_message(sender, timestamp, plaintext);
+            ui_print_system_message((const char*)plaintext);
         }
         else if(buf[0] == TYPE_FRIENDADD)
         {
             char new_friend[USERNAME_SIZE];
             memcpy(new_friend, buf+TYPE_BYTE+USERNAME_SIZE, USERNAME_SIZE);
             friends_add(new_friend, (unsigned char*)(buf + HEADER));
+            ui_print_system_message("Added friend successfully.");
         }
-        else print_message(sender, timestamp, plaintext);
-        if(buf[0] == TYPE_MESSAGE) { chatdb_insert(sender, self, timestamp, (const char *)plaintext); }
+        else if(buf[0] == TYPE_MESSAGE) 
+        {
+            chatdb_insert(sender, self, timestamp, (const unsigned char *)plaintext);
+            if(strcmp(sender, recipient) == 0)
+            {
+                if (chat_scroll_offset == 0) { ui_print_message(timestamp, sender, plaintext); }
+            }
+            else 
+            {
+                friends_increment_unread(sender);
+            }
+        }
 
         memset(buf, 0, MESSAGE_MAX+crypto_box_SEALBYTES);
     }
+    ui_cleanup();
     printf("Server disconnected\n");
-    chatdb_close();
+    sqlite3_close(chat_db);
+    sqlite3_close(friend_list);
     close(sock);
     exit(0);
 }
@@ -286,7 +270,7 @@ int main()
         return 1;
     }
 
-    printf("connected to server.\n\n");
+    printf("Connected to server.\n\n");
 
     int idle = 60;
     int optval = 1;
@@ -314,6 +298,12 @@ int main()
 
     friend_db_init();
 
+    ui_init();
+    ui_set_header("(no chat open)");
+    ui_draw_friends();
+
+    ui_show_help();
+
     pthread_t recv_thread;
     int *sock_ptr = (int*)malloc(sizeof(int));
     *sock_ptr = sock;
@@ -328,22 +318,20 @@ int main()
         close(*sock_ptr);
         free(sock_ptr);
         pthread_attr_destroy(&attr);
-        chatdb_close();
+        ui_cleanup();
+        sqlite3_close(friend_list);
+        sqlite3_close(chat_db);
         return 0;
     }
 
-    printf("\n===============================================\n\n");
-    printf("You may send messages now! (press enter to send).\nFor a list of available commands, type /help\n");
-
     snprintf(prompt, sizeof(prompt), "(to %s): ", recipient);
     while(true) {
-        char *msg = readline(prompt);   
-        printf("\033[1A\r\033[2K");
-        fflush(stdout);
+        char *msg = ui_get_input();  
         send_message(msg);
-        free(msg);
     }
-    chatdb_close();
+    ui_cleanup();
+    sqlite3_close(friend_list);
+    sqlite3_close(chat_db);
     close(sock);
     return 0;
 }

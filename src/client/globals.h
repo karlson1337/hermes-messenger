@@ -21,3 +21,8 @@ extern unsigned char server_pk[crypto_box_PUBLICKEYBYTES];
 extern char recipient[USERNAME_SIZE];
 
 extern int sock;
+
+extern const char *commands[];
+extern const int NUM_COMMANDS;
+
+extern int chat_scroll_offset;

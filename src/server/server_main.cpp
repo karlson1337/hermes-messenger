@@ -2,13 +2,14 @@
 
 #include "../hermes_protocols.h"
 
-#include <signal.h>
 #include <netinet/tcp.h>
 #include <string>
 #include <unordered_map>
 #include <queue>
 
 sqlite3 *db;
+sqlite3 *message_db;
+
 unsigned char server_pk[crypto_box_PUBLICKEYBYTES];
 unsigned char server_sk[crypto_box_SECRETKEYBYTES];
 
@@ -17,12 +18,14 @@ bool db_register(const char *username, const char *pwhash, const unsigned char *
 bool db_get_pwhash(const char *username, char *out_hash);
 bool get_pubkey(const char *username, unsigned char *pubkey_out);
 
+bool db_get_queued(const char *recipient, void (*cb)(const unsigned char *content, void *ud), void *ud);
+bool db_queue_push(const char *recipient, const unsigned char *content);
+
 typedef struct User
 {
     std::string username;
     int sock;
     pthread_mutex_t send_mutex;
-    std::queue<std::string> offline_queue;
 
     User() { pthread_mutex_init(&send_mutex, nullptr); }
     ~User() { pthread_mutex_destroy(&send_mutex); }
@@ -64,6 +67,8 @@ bool authenticate(int sock, char username_out[USERNAME_SIZE]) {
         send_all(sock, &resp, 1);
         return false;
     }
+
+
 
     if (!db_get_pwhash(payload.username, stored_hash)) {
 
@@ -129,6 +134,7 @@ void *connection_handler(void *socket_desc) {
     if (!authenticate(sock, username)) 
     {
         close(sock);
+        printf("auth failed\n");
         return NULL;
     }
 
@@ -139,8 +145,15 @@ void *connection_handler(void *socket_desc) {
     Users[u->username] = u;
     pthread_mutex_unlock(&table_mutex);
 
+    auto flush_cb = [](const unsigned char *content, void *ud) 
+    {
+        int fd = *(int *)ud;
+        send_all(fd, content, MESSAGE_MAX + crypto_box_SEALBYTES);
+    };
+    db_get_queued(username, flush_cb, &sock);
+
     while (1) {
-        char buf[MESSAGE_MAX+crypto_box_SEALBYTES] = {0};
+        unsigned char buf[MESSAGE_MAX+crypto_box_SEALBYTES] = {0};
         if (recv_all(sock, buf, MESSAGE_MAX+crypto_box_SEALBYTES) <= 0) break;
 
         char recipient[USERNAME_SIZE];
@@ -150,7 +163,7 @@ void *connection_handler(void *socket_desc) {
         {
             char temp[MESSAGE_MAX + crypto_box_SEALBYTES] = {0};
             unsigned char temp_pk[crypto_box_PUBLICKEYBYTES];
-            strncpy(temp+1, "server", 6);
+            strncpy(temp+TYPE_BYTE, "server", 6);
             if(!get_pubkey(recipient, temp_pk)) 
             {
                 temp[0] = TYPE_404;
@@ -160,7 +173,7 @@ void *connection_handler(void *socket_desc) {
             }
             temp[0] = TYPE_FRIENDADD;
 
-            strncpy(temp+TYPE_BYTE+USERNAME_SIZE, recipient, USERNAME_SIZE);
+            memcpy(temp+TYPE_BYTE+USERNAME_SIZE, recipient, USERNAME_SIZE);
             memcpy(temp + HEADER, temp_pk, crypto_box_PUBLICKEYBYTES);
             send_all(u->sock, temp, MESSAGE_MAX + crypto_box_SEALBYTES);
             continue;
@@ -172,6 +185,7 @@ void *connection_handler(void *socket_desc) {
         if(Users.find(std::string(recipient)) == Users.end()) 
         {
             pthread_mutex_unlock(&table_mutex);
+            db_queue_push(recipient, buf);
             continue;
         }
         temp_fd = (Users[std::string(recipient)])->sock;
@@ -197,6 +211,7 @@ void cleanup(int sig) {
     }
     pthread_mutex_unlock(&table_mutex);
     sqlite3_close(db);
+    sqlite3_close(message_db);
     exit(0);
 }
 

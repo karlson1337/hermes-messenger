@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <sqlcipher/sqlite3.h>
 #include <time.h>
+#include <signal.h>
 
 #define USERNAME_SIZE 25
 #define PASSWORD_SIZE 65
@@ -28,7 +29,7 @@
 typedef struct { 
     char username[USERNAME_SIZE]; 
     char password[PASSWORD_SIZE];
-    unsigned char pubkey[crypto_sign_PUBLICKEYBYTES];
+    unsigned char pubkey[crypto_box_PUBLICKEYBYTES];
 } auth_payload;
 
 static ssize_t recv_all(int fd, void *buf, size_t len) {
