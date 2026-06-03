@@ -5,6 +5,7 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 ![C](https://img.shields.io/badge/C-A8B9CC?style=for-the-badge&logo=c&logoColor=white)
 ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
+![macOS](https://img.shields.io/badge/macOS-000000?style=for-the-badge&logo=apple&logoColor=white)
 
 ---
 
@@ -38,6 +39,8 @@ sudo apt install libsodium-dev libsqlcipher-dev libncurses-dev
 ---
 
 ## Building
+
+Install clang or gcc, then set `CXX` and `CC` in Makefile (clang++ and clang by default).
 
 On Linux, use the provided Makefile from the repository root:
 
