@@ -1,11 +1,15 @@
 //Hermes messenger main client code.
 
+#define _POSIX_C_SOURCE 200112L
+
 #include "../hermes_protocols.h"                   
 #include "function_defs.h"
 
-#include <netinet/tcp.h>
 #include <stdbool.h>
 #include <termios.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #define COLOR_RECEIVED "\033[32m"
 #define COLOR_NOTIFY "\033[33m"
@@ -44,6 +48,14 @@ const char *commands[] =
 const int NUM_COMMANDS = sizeof(commands) / sizeof(commands[0]);
 
 //========MAIN FUNCTIONALITY CODE========
+
+void cleanup(int sig)
+{
+    ui_cleanup();
+    sqlite3_close(chat_db);
+    sqlite3_close(friend_list);
+    close(sock);
+}
 
 static void print_history(int64_t timestamp, const char *sender, const unsigned char *msg, void *ud) {
     ui_print_message(timestamp, sender, msg); }
@@ -268,14 +280,6 @@ void *recv_handler(void *sock_desc)
     exit(0);
 }
 
-void cleanup(int sig)
-{
-    ui_cleanup();
-    sqlite3_close(chat_db);
-    sqlite3_close(friend_list);
-    close(sock);
-}
-
 int main() 
 {
     signal(SIGINT, cleanup);
@@ -285,40 +289,51 @@ int main()
 
     struct sockaddr_in addr;
 
-    char server_ip[16] = "127.0.0.1";
-    int port = 8080;
+    char host[256] = "127.0.0.1";
+    char port[8] = "8080";
 
-    printf("enter server ip (leave blank for localhost): ");
-    char input_ip[16] = {0};
-    fgets(input_ip, sizeof(input_ip), stdin);
-    if (input_ip[0] != '\n') {
-        input_ip[strcspn(input_ip, "\n")] = '\0';
-        strncpy(server_ip, input_ip, sizeof(server_ip) - 1);
+    printf("enter host (leave blank for localhost): ");
+    char input_host[256] = {0};
+    fgets(input_host, sizeof(input_host), stdin);
+    if (input_host[0] != '\n') {
+        input_host[strcspn(input_host, "\n")] = '\0';
+        strncpy(host, input_host, sizeof(host) - 1);
     }
 
     printf("enter server port (leave blank for 8080): ");
     char input_port[8] = {0};
     fgets(input_port, sizeof(input_port), stdin);
     if (input_port[0] != '\n')
-    port = atoi(input_port);
+    strncpy(port, input_port, sizeof(port) - 1);
 
     printf("\nHermes messenger early version. \nMessage max length is 2048 characters.\n\n");
 
-    if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
-    {
-        perror("socket");
-        return -1;
+    printf("connecting to %s:%s\n", host, port);
+
+    struct addrinfo hints = {0}, *res, *p;
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    int status = getaddrinfo(host, port, &hints, &res);
+        if (status != 0) 
+        {
+            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+            return -1;
+        }
+
+    for (p = res; p != NULL; p = p->ai_next) {
+        sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (sock == -1) continue;
+        if (connect(sock, p->ai_addr, p->ai_addrlen) == 0) break; //success
+        close(sock);
+        sock = -1;
     }
 
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(port);
-    inet_pton(AF_INET, server_ip, &addr.sin_addr);
+    freeaddrinfo(res);
 
-    printf("connecting to %s:%d\n", server_ip, ntohs(addr.sin_port));
-
-    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) 
+    if (sock == -1) 
     {
-        perror("error");
+        fprintf(stderr, "connection failed\n");
         return 1;
     }
 

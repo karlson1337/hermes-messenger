@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sqlcipher/sqlite3.h>

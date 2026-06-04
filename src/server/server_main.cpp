@@ -2,7 +2,6 @@
 
 #include "../hermes_protocols.h"
 
-#include <netinet/tcp.h>
 #include <string>
 #include <unordered_map>
 #include <queue>
@@ -265,11 +264,11 @@ int main() {
     db_init();
 
     int server_fd, client_fd, *new_fd;
-    struct sockaddr_in addr;
+    struct sockaddr_in6 addr;
     int opt = 1;
     socklen_t addrlen = sizeof(addr);
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    server_fd = socket(AF_INET6, SOCK_STREAM, 0);
     if (server_fd < 0) { perror("socket"); return 1; }
 
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
@@ -282,12 +281,15 @@ int main() {
     if (input_port[0] != '\n')
     port = atoi(input_port);
 
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port        = htons(port);
+    addr.sin6_family = AF_INET6;
+    addr.sin6_addr   = in6addr_any;
+    addr.sin6_port   = htons(port);
 
     if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
         { perror("bind"); return 1; }
+
+    int no = 0;
+    setsockopt(server_fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
 
     if (listen(server_fd, 16) < 0)
         { perror("listen"); return 1; }
