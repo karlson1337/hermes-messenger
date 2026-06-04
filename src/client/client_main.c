@@ -141,10 +141,7 @@ bool command(const char *msg)
     }
     if(strcmp(sub, "quit") == 0)
     {
-        ui_cleanup();
-        close(sock);
-        sqlite3_close(chat_db);
-        sqlite3_close(friend_list);
+        cleanup(0);
         exit(0);
     }
     
@@ -267,16 +264,23 @@ void *recv_handler(void *sock_desc)
 
         memset(buf, 0, MESSAGE_MAX+crypto_box_SEALBYTES);
     }
-    ui_cleanup();
     printf("Server disconnected\n");
+    exit(0);
+}
+
+void cleanup(int sig)
+{
+    ui_cleanup();
     sqlite3_close(chat_db);
     sqlite3_close(friend_list);
     close(sock);
-    exit(0);
 }
 
 int main() 
 {
+    signal(SIGINT, cleanup);
+    signal(SIGTERM, cleanup);
+
     if (sodium_init() < 0) { fprintf(stderr, "libsodium init failed\n"); return 1; }
 
     struct sockaddr_in addr;
@@ -342,15 +346,12 @@ int main()
     }
 
     get_credentials();
-
     if (!authenticate()) { return 1; }
 
     friend_db_init();
-
     ui_init();
     ui_set_header("(no chat open)");
     ui_draw_friends();
-
     ui_show_help();
 
     pthread_t recv_thread;
@@ -364,12 +365,9 @@ int main()
     if(pthread_create(&recv_thread, NULL, recv_handler, sock_ptr) < 0)
     {
         perror("error creating receiving handler");
-        close(*sock_ptr);
         free(sock_ptr);
         pthread_attr_destroy(&attr);
-        ui_cleanup();
-        sqlite3_close(friend_list);
-        sqlite3_close(chat_db);
+        cleanup(0);
         return 0;
     }
     pthread_attr_destroy(&attr);
@@ -379,9 +377,6 @@ int main()
         char *msg = ui_get_input();  
         send_message(msg);
     }
-    ui_cleanup();
-    sqlite3_close(friend_list);
-    sqlite3_close(chat_db);
-    close(sock);
+    cleanup(0);
     return 0;
 }
