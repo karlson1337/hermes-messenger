@@ -37,7 +37,8 @@ const char *commands[] =
 {
     "/help   - show available commands",
     "/add    - add a friend: /add <username>",
-    "/open   - open a chat with a friend: /open <username>]",
+    "/open   - open a chat with a friend: /open <username>",
+    "/verify - verify if encryption is working: /verify <username>",
     "/quit   - disconnect and exit",
 };
 const int NUM_COMMANDS = sizeof(commands) / sizeof(commands[0]);
@@ -60,6 +61,36 @@ void open_chat(const char *new_recipient) {
     ui_draw_friends();
     chat_scroll_offset = 0;
     redraw_chat(); // clears and renders with chatdb_history
+}
+
+void security_number(const unsigned char *pk_a, const unsigned char *pk_b) 
+{
+    const unsigned char *lo = pk_a, *hi = pk_b;
+    if (memcmp(pk_a, pk_b, crypto_box_PUBLICKEYBYTES) > 0) { lo = pk_b; hi = pk_a; }
+ 
+    unsigned char combined[crypto_box_PUBLICKEYBYTES * 2];
+    memcpy(combined, lo, crypto_box_PUBLICKEYBYTES);
+    memcpy(combined + crypto_box_PUBLICKEYBYTES, hi, crypto_box_PUBLICKEYBYTES);
+
+    unsigned char hash[32];
+    char out[32 * 2 + 1];
+    crypto_generichash(hash, sizeof(hash), combined, sizeof(combined), NULL, 0);
+
+    // format as hex
+    for (int i = 0; i < 32; i++)
+        sprintf(out + i * 2, "%02x", hash[i]);
+    out[64] = '\0';
+
+    char grouped[64 + 64/4 + 1]; //print in groups of 4
+    int pos = 0;
+    for (int i = 0; i < 64; i++) {
+        if (i > 0 && i % 4 == 0) grouped[pos++] = ' ';
+        grouped[pos++] = out[i];
+    }
+    grouped[pos] = '\0';
+
+    ui_print_system_message(grouped);
+    ui_print_system_message("Compare this string with the one your friend gets. It should be same. If not, then encryption has been compromised!");
 }
 
 bool command(const char *msg)
@@ -96,6 +127,17 @@ bool command(const char *msg)
         if (!friend_get_pubkey(arg, pubkey)){ return true; }
         open_chat(arg);
         return true;
+    }
+    if(strcmp(sub, "verify") == 0)
+    {
+        if (arg[0] == '\0') { return true; }
+        unsigned char pubkey[crypto_box_PUBLICKEYBYTES];
+
+        if(strcmp(arg, self) == 0) { return true; }
+
+        if (!friend_get_pubkey(arg, pubkey)){ return true; }
+
+        security_number(self_pk, pubkey);
     }
     if(strcmp(sub, "quit") == 0)
     {

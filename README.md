@@ -11,7 +11,7 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 
 ## Features
 
-- **End-to-end encryption** - messages are encrypted with the recipient's public key using X25519 + XSalsa20-Poly1305 (`crypto_box_seal`). The server forwards ciphertext it cannot read.
+- **End-to-end encryption** - messages are encrypted with the recipient's public key using X25519 + XSalsa20-Poly1305 (`crypto_box_seal`). The server forwards ciphertext it cannot read. Can be verified with security numbers.
 - **Secure authentication** - credentials are transmitted inside a sealed box encrypted to the server's public key. Passwords are never stored in plaintext; the server stores Argon2 hashes only.
 - **Identity keys** - each user has an X25519 keypair. The private key is stored locally, encrypted with a key derived from the user's password via Argon2 (`crypto_pwhash`).
 - **Encrypted chat history** - local message history is stored in a SQLCipher-encrypted SQLite database, keyed from the user's password.
@@ -91,10 +91,11 @@ Friends db and encrypted chat db are also stored in the same directory.
 ## Usage
 
 ```
-/help               show available commands
-/add  <username>    add someone as a friend
-/open <username>    open a chat with a friend
-/quit               disconnect and exit
+/help                 show available commands
+/add    <username>    add someone as a friend
+/open   <username>    open a chat with a friend
+/verify <username>    verify if encryption is working
+/quit                 disconnect and exit
 ```
 
 Type a message and press **Enter** to send. You must `/open` a chat before sending messages.
