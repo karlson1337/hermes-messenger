@@ -218,7 +218,6 @@ void *recv_handler(void *sock_desc)
     unsigned char plaintext[MSG_BODY_SIZE] = {0};
 
     while (recv_all(sock, buf, MESSAGE_MAX+crypto_box_SEALBYTES) > 0) {
-
         int64_t timestamp;
         memcpy(&timestamp, buf + TYPE_BYTE + (USERNAME_SIZE * 2), TIMESTAMP_HEADER);
 
@@ -235,6 +234,7 @@ void *recv_handler(void *sock_desc)
             self_pk, self_sk) != 0) 
             {
                 ui_print_system_message("Decryption failed");
+                memset(buf, 0, MESSAGE_MAX+crypto_box_SEALBYTES);
                 continue;
             }
         }
@@ -256,6 +256,7 @@ void *recv_handler(void *sock_desc)
                 crypto_box_PUBLICKEYBYTES + crypto_box_SEALBYTES,
                 self_pk, self_sk) != 0) {
                 ui_print_system_message("Failed to decrypt friend's public key.");
+                memset(buf, 0, MESSAGE_MAX+crypto_box_SEALBYTES);
                 continue;
             }
             friends_add(new_friend, decrypted_pk);
@@ -263,6 +264,9 @@ void *recv_handler(void *sock_desc)
         }
         else if(buf[0] == TYPE_MESSAGE) 
         {
+            //drop message if sender is not a friend.
+            if(!friend_exists(sender)) { memset(buf, 0, MESSAGE_MAX+crypto_box_SEALBYTES); continue; }
+
             chatdb_insert(sender, self, timestamp, (const unsigned char *)plaintext);
             if(strcmp(sender, recipient) == 0)
             {
@@ -273,7 +277,6 @@ void *recv_handler(void *sock_desc)
                 friends_increment_unread(sender);
             }
         }
-
         memset(buf, 0, MESSAGE_MAX+crypto_box_SEALBYTES);
     }
     printf("Server disconnected\n");
