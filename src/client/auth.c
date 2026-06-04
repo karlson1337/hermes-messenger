@@ -3,6 +3,16 @@
 #include "globals.h"
 #include "function_defs.h"
 
+bool load_server_pk(unsigned char *pk_out) {
+    char path[256];
+    snprintf(path, sizeof(path), "%s/.config/hermes/server_pk.key", getenv("HOME"));
+    FILE *f = fopen(path, "rb");
+    if (!f) return false;
+    fread(pk_out, 1, crypto_box_PUBLICKEYBYTES, f);
+    fclose(f);
+    return true;
+}
+
 void store_private_key(const unsigned char *sk, const char *password) 
 {
     unsigned char salt[crypto_pwhash_SALTBYTES];

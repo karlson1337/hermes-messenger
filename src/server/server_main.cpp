@@ -21,6 +21,33 @@ bool get_pubkey(const char *username, unsigned char *pubkey_out);
 bool db_get_queued(const char *recipient, void (*cb)(const unsigned char *content, void *ud), void *ud);
 bool db_queue_push(const char *recipient, const unsigned char *content);
 
+void load_or_generate_keypair() {
+    FILE *fpk = fopen("server_pk.key", "rb");
+    FILE *fsk = fopen("server_sk.key", "rb");
+
+    if (fpk && fsk) {
+        fread(server_pk, 1, crypto_box_PUBLICKEYBYTES, fpk);
+        fread(server_sk, 1, crypto_box_SECRETKEYBYTES, fsk);
+        fclose(fpk);
+        fclose(fsk);
+    } else {
+        if (fpk) fclose(fpk);
+        if (fsk) fclose(fsk);
+
+        crypto_box_keypair(server_pk, server_sk);
+
+        fpk = fopen("server_pk.key", "wb");
+        fsk = fopen("server_sk.key", "wb");
+        fwrite(server_pk, 1, crypto_box_PUBLICKEYBYTES, fpk);
+        fwrite(server_sk, 1, crypto_box_SECRETKEYBYTES, fsk);
+        fclose(fpk);
+        fclose(fsk);
+
+        chmod("server_pk.key", 0644);  // public, readable by anyone
+        chmod("server_sk.key", 0600);  // private, owner only
+    }
+}
+
 typedef struct User
 {
     std::string username;
@@ -35,8 +62,6 @@ std::unordered_map<std::string, User*> Users;
 pthread_mutex_t table_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 bool authenticate(int sock, char username_out[USERNAME_SIZE]) {
-
-    if (send_all(sock, server_pk, crypto_box_PUBLICKEYBYTES) <= 0) return false;
 
     size_t cipher_len = sizeof(auth_payload) + crypto_box_SEALBYTES;
     unsigned char* ciphertext = (unsigned char*)malloc(cipher_len);
@@ -61,14 +86,15 @@ bool authenticate(int sock, char username_out[USERNAME_SIZE]) {
     char stored_hash[crypto_pwhash_STRBYTES];
     uint8_t resp = 0;
 
-    if(Users.find(payload.username) != Users.end())
+    pthread_mutex_lock(&table_mutex);
+    bool already_online = Users.find(payload.username) != Users.end();
+    pthread_mutex_unlock(&table_mutex);
+    if (already_online)
     {
         resp = 3;
         send_all(sock, &resp, 1);
         return false;
     }
-
-
 
     if (!db_get_pwhash(payload.username, stored_hash)) {
 
@@ -221,8 +247,8 @@ int main() {
 
     if (sodium_init() < 0) { fprintf(stderr, "sodium init failed\n"); return 1; }
     
-    crypto_box_keypair(server_pk, server_sk);
-    
+    load_or_generate_keypair();
+
     db_init();
 
     int server_fd, client_fd, *new_fd;

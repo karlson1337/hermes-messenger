@@ -68,6 +68,10 @@ Run the server (in `bin/server`):
 
 The server will prompt for a port (default: `8080`). User identities and password hashes are stored in `hermes.db`, and message queue for offline users is stored in `hermes_messages.db`.
 
+On first setup, copy the generated `server_pk.key` to `~/.config/hermes/` on the client's machine before running the client. This key is used to encrypt credentials during authentication. If it doesn't match the server's actual public key, authentication will fail.
+
+> **Note:** Never copy server_sk.key to any client machine. If it leaks, an attacker can impersonate the server and decrypt user credentials.
+
 ### Client
 
 Run the client (in `bin/client`):
@@ -123,7 +127,6 @@ Message bodies are `crypto_box_seal` ciphertext. Server packets (friend add resp
 
 ## Limitations & Known Issues
 
-- The server generates a new keypair on each restart. Clients connecting after a restart will see a new server key (Trust On First Use model - first-connect key is trusted).
 - No group chats.
 
 ---

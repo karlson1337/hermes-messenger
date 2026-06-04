@@ -41,6 +41,7 @@ void friends_clear_unread(const char *username);
 
 //AUTH
 
+bool load_server_pk(unsigned char *pk_out);
 void store_private_key(const unsigned char *sk, const char *password);
 bool load_private_key(unsigned char *sk_out, const char *password);
 void get_credentials();

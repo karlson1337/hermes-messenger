@@ -4,7 +4,6 @@
 #include "function_defs.h"
 
 #include <netinet/tcp.h>
-#include <sys/stat.h>
 #include <stdbool.h>
 #include <termios.h>
 
@@ -285,9 +284,10 @@ int main()
         setsockopt(sock, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle));
     #endif
 
-    if (recv_all(sock, server_pk, crypto_box_PUBLICKEYBYTES) <= 0) 
+    if (!load_server_pk(server_pk)) 
     {
-        fprintf(stderr, "Failed to receive server public key\n");
+        fprintf(stderr, "server_pk.key not found in ~/.config/hermes/\n");
+        fprintf(stderr, "copy it from the server dir before connecting.\n");
         close(sock);
         return 1;
     }
@@ -323,6 +323,7 @@ int main()
         sqlite3_close(chat_db);
         return 0;
     }
+    pthread_attr_destroy(&attr);
 
     snprintf(prompt, sizeof(prompt), "(to %s): ", recipient);
     while(true) {

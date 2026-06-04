@@ -10,6 +10,7 @@
 #include <sqlcipher/sqlite3.h>
 #include <time.h>
 #include <signal.h>
+#include <sys/stat.h>
 
 #define USERNAME_SIZE 25
 #define PASSWORD_SIZE 65
