@@ -13,7 +13,7 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 
 - **End-to-end encryption** - messages are encrypted with the recipient's public key using X25519 + XSalsa20-Poly1305 (`crypto_box_seal`). The server forwards ciphertext it cannot read.
 - **Secure authentication** - credentials are transmitted inside a sealed box encrypted to the server's public key. Passwords are never stored in plaintext; the server stores Argon2 hashes only.
-- **Identity keys** - each user has an Ed25519 keypair. The private key is stored locally, encrypted with a key derived from the user's password via Argon2 (`crypto_pwhash`).
+- **Identity keys** - each user has an X25519 keypair. The private key is stored locally, encrypted with a key derived from the user's password via Argon2 (`crypto_pwhash`).
 - **Encrypted chat history** - local message history is stored in a SQLCipher-encrypted SQLite database, keyed from the user's password.
 - **Key binding** - the server binds each username to a public key at registration. Login with a mismatched key is rejected, preventing account takeover after key loss.
 - **ncurses based TUI**
@@ -68,9 +68,9 @@ Run the server (in `bin/server`):
 
 The server will prompt for a port (default: `8080`). User identities and password hashes are stored in `hermes.db`, and message queue for offline users is stored in `hermes_messages.db`.
 
-On first setup, copy the generated `server_pk.key` to `~/.config/hermes/` on the client's machine before running the client. This key is used to encrypt credentials during authentication. If it doesn't match the server's actual public key, authentication will fail.
+On first setup, copy the generated `server_pk.key` to `~/.config/hermes/` on the clients' computers before running the clients. This key is used to encrypt credentials during authentication. If it doesn't match the server's actual public key, authentication will fail.
 
-> **Note:** Never copy server_sk.key to any client machine. If it leaks, an attacker can impersonate the server and decrypt user credentials.
+> **Note:** Never copy server_sk.key to any client computer. If it leaks, an attacker can impersonate the server and decrypt user credentials.
 
 ### Client
 
@@ -92,7 +92,7 @@ Friends db and encrypted chat db are also stored in the same directory.
 
 ```
 /help               show available commands
-/add  <username>    send a friend request
+/add  <username>    add someone as a friend
 /open <username>    open a chat with a friend
 /quit               disconnect and exit
 ```
