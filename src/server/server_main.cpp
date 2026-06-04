@@ -194,14 +194,27 @@ void *connection_handler(void *socket_desc) {
             {
                 temp[0] = TYPE_404;
                 memcpy(temp+HEADER, "user does not exist!", 20);
+                pthread_mutex_lock(&u->send_mutex);
                 send_all(u->sock, temp, MESSAGE_MAX+crypto_box_SEALBYTES);
+                pthread_mutex_unlock(&u->send_mutex);
                 continue;
             }
             temp[0] = TYPE_FRIENDADD;
-
             memcpy(temp+TYPE_BYTE+USERNAME_SIZE, recipient, USERNAME_SIZE);
-            memcpy(temp + HEADER, temp_pk, crypto_box_PUBLICKEYBYTES);
+
+            unsigned char sender_pk[crypto_box_PUBLICKEYBYTES];
+            if (!get_pubkey(username, sender_pk)) {
+                temp[0] = TYPE_ERROR;
+                pthread_mutex_lock(&u->send_mutex);
+                send_all(u->sock, temp, MESSAGE_MAX + crypto_box_SEALBYTES);
+                pthread_mutex_unlock(&u->send_mutex);
+                continue;
+            }
+            crypto_box_seal((unsigned char*)temp + HEADER, temp_pk, crypto_box_PUBLICKEYBYTES, sender_pk);
+
+            pthread_mutex_lock(&u->send_mutex);
             send_all(u->sock, temp, MESSAGE_MAX + crypto_box_SEALBYTES);
+            pthread_mutex_unlock(&u->send_mutex);
             continue;
         }
 

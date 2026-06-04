@@ -81,8 +81,8 @@ bool command(const char *msg)
 
         char temp[MESSAGE_MAX] = {0};
         temp[0] = 1;
-        memcpy(temp+1, self, USERNAME_SIZE);
-        memcpy(temp+1+USERNAME_SIZE, arg, USERNAME_SIZE);
+        memcpy(temp+TYPE_BYTE, self, USERNAME_SIZE);
+        memcpy(temp+TYPE_BYTE+USERNAME_SIZE, arg, USERNAME_SIZE);
         send_all(sock, temp, MESSAGE_MAX+crypto_box_SEALBYTES);
         return true;
     }
@@ -200,7 +200,14 @@ void *recv_handler(void *sock_desc)
         {
             char new_friend[USERNAME_SIZE];
             memcpy(new_friend, buf+TYPE_BYTE+USERNAME_SIZE, USERNAME_SIZE);
-            friends_add(new_friend, (unsigned char*)(buf + HEADER));
+            unsigned char decrypted_pk[crypto_box_PUBLICKEYBYTES];
+            if (crypto_box_seal_open(decrypted_pk, buf + HEADER,
+                crypto_box_PUBLICKEYBYTES + crypto_box_SEALBYTES,
+                self_pk, self_sk) != 0) {
+                ui_print_system_message("Failed to decrypt friend's public key.");
+                continue;
+            }
+            friends_add(new_friend, decrypted_pk);
             ui_print_system_message("Added friend successfully.");
         }
         else if(buf[0] == TYPE_MESSAGE) 
