@@ -26,14 +26,21 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 | Library | Purpose |
 |---|---|
 | [libsodium](https://libsodium.org) | All cryptography (encryption, hashing, key derivation) |
-[SQLCipher](https://www.zetetic.net/sqlcipher/) | Friend list and encrypted chat history |
-| .[ncurses](https://invisible-island.net/ncurses/) | Terminal user interface |
-| pthreads | Concurrent connection handling |
+| [SQLCipher](https://www.zetetic.net/sqlcipher/) | Friend list and encrypted chat history |
+| [ncurses](https://invisible-island.net/ncurses/) | Terminal user interface |
 
-### Install dependencies (Debian/Ubuntu)
+### Install dependencies
+
+(Debian/Ubuntu)
 
 ```bash
 sudo apt install libsodium-dev libsqlcipher-dev libncurses-dev
+```
+
+(macOS)
+
+```bash
+brew install libsodium sqlcipher ncurses
 ```
 
 ---
@@ -42,13 +49,15 @@ sudo apt install libsodium-dev libsqlcipher-dev libncurses-dev
 
 Install clang or gcc, then set `CXX` and `CC` in Makefile (clang++ and clang by default).
 
-On Linux, use the provided Makefile from the repository root:
+Run from repository root
+
+Linux:
 
 ```bash
 make
 ```
 
-Or if on macOS and dependencies installed using brew:
+macOS:
 
 ```bash
 make CFLAGS="-I$(brew --prefix)/include" LDFLAGS="-L$(brew --prefix)/lib"
@@ -113,6 +122,7 @@ Client A > Server > Client B
 
 - **End-to-end**: message bodies are encrypted with `crypto_box_seal` (X25519 ECDH + XSalsa20-Poly1305). The server cannot decrypt messages.
 - **Authentication**: the auth payload (username, password, public key) is sealed to the server's public key - only the server can decrypt it.
+- **Encryption verification** — `/verify <username>` derives a fingerprint from both users' public keys. If both parties see the same string out-of-band (e.g. over a phone call), it confirms no man-in-the-middle has substituted either key. Equivalent to safety numbers on Signal or WhatsApp.
 
 ---
 
@@ -129,6 +139,7 @@ Message bodies are `crypto_box_seal` ciphertext. Server packets (friend add resp
 ## Limitations & Known Issues
 
 - No group chats.
+- No forward secrecy: no ephemeral keys per session (static X25519)
 
 ---
 
