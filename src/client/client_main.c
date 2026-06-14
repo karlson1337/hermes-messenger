@@ -11,10 +11,6 @@
 #include <sys/types.h>
 #include <termios.h>
 
-#define COLOR_RECEIVED "\033[32m"
-#define COLOR_NOTIFY "\033[33m"
-#define COLOR_RESET "\033[0m"
-
 #define COMMAND_SIZE 16
 
 #define MAX_HISTORY 200
