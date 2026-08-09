@@ -15,4 +15,5 @@ mkdir -p ~/.config/hermes/
 mv server_pk.key ~/.config/hermes/
 echo "hermes.karlson1337.me 8080" > ~/.config/hermes/host
 
+chmod +x hermes_client
 ./hermes_client
