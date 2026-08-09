@@ -33,6 +33,43 @@ int sock;
 
 int chat_scroll_offset = 0;
 
+static bool load_host_config(char *host, size_t host_size, char *port,
+                              size_t port_size) {
+  const char *home = getenv("HOME");
+  if (!home)
+    return false;
+  char path[512];
+  snprintf(path, sizeof(path), "%s/.config/hermes/host", home);
+  FILE *f = fopen(path, "r");
+  if (!f)
+    return false;
+  char line_host[256] = {0};
+  char line_port[8] = {0};
+  bool ok = fscanf(f, "%255s %7s", line_host, line_port) == 2;
+  fclose(f);
+  if (!ok)
+    return false;
+  strncpy(host, line_host, host_size - 1);
+  strncpy(port, line_port, port_size - 1);
+  return true;
+}
+
+static void save_host_config(const char *host, const char *port) {
+  const char *home = getenv("HOME");
+  if (!home)
+    return;
+  char dir[512];
+  snprintf(dir, sizeof(dir), "%s/.config/hermes", home);
+  mkdir(dir, 0700);
+  char path[512];
+  snprintf(path, sizeof(path), "%s/host", dir);
+  FILE *f = fopen(path, "w");
+  if (!f)
+    return;
+  fprintf(f, "%s %s\n", host, port);
+  fclose(f);
+}
+
 const char *commands[] = {
     "/help   - show available commands",
     "/add    - add a friend: /add <username>",
@@ -305,19 +342,28 @@ int main() {
   char host[256] = "127.0.0.1";
   char port[8] = "8080";
 
-  printf("enter host (leave blank for localhost): ");
-  char input_host[256] = {0};
-  fgets(input_host, sizeof(input_host), stdin);
-  if (input_host[0] != '\n') {
-    input_host[strcspn(input_host, "\n")] = '\0';
-    strncpy(host, input_host, sizeof(host) - 1);
-  }
+  bool have_saved = load_host_config(host, sizeof(host), port, sizeof(port));
 
-  printf("enter server port (leave blank for 8080): ");
-  char input_port[8] = {0};
-  fgets(input_port, sizeof(input_port), stdin);
-  if (input_port[0] != '\n')
-    strncpy(port, input_port, sizeof(port) - 1);
+  if (have_saved) {
+    printf("using saved server %s:%s (delete ~/.config/hermes/host to "
+           "change)\n", host, port);
+  } else {
+    printf("enter host (leave blank for localhost): ");
+    char input_host[256] = {0};
+    fgets(input_host, sizeof(input_host), stdin);
+    if (input_host[0] != '\n') {
+      input_host[strcspn(input_host, "\n")] = '\0';
+      strncpy(host, input_host, sizeof(host) - 1);
+    }
+
+    printf("enter server port (leave blank for 8080): ");
+    char input_port[8] = {0};
+    fgets(input_port, sizeof(input_port), stdin);
+    if (input_port[0] != '\n') {
+      input_port[strcspn(input_port, "\n")] = '\0';
+      strncpy(port, input_port, sizeof(port) - 1);
+    }
+  }
 
   printf("\nHermes messenger early version. \nMessage max length is 2048 "
          "characters.\n\n");
@@ -352,6 +398,9 @@ int main() {
   }
 
   printf("Connected to server.\n\n");
+
+  if (!have_saved)
+    save_host_config(host, port);
 
   int idle = 60;
   int optval = 1;

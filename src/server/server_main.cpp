@@ -22,6 +22,27 @@ bool db_get_queued(const char *recipient,
                    void *ud);
 bool db_queue_push(const char *recipient, const unsigned char *content);
 
+bool load_port_config(int *port_out) {
+  FILE *f = fopen("port", "r");
+  if (!f)
+    return false;
+  int port;
+  bool ok = fscanf(f, "%d", &port) == 1 && port > 0 && port <= 65535;
+  fclose(f);
+  if (!ok)
+    return false;
+  *port_out = port;
+  return true;
+}
+
+void save_port_config(int port) {
+  FILE *f = fopen("port", "w");
+  if (!f)
+    return;
+  fprintf(f, "%d\n", port);
+  fclose(f);
+}
+
 void load_or_generate_keypair() {
   FILE *fpk = fopen("server_pk.key", "rb");
   FILE *fsk = fopen("server_sk.key", "rb");
@@ -283,11 +304,17 @@ int main() {
   }
 
   int port = 8080;
-  printf("enter server port (leave blank for 8080): ");
-  char input_port[8] = {0};
-  fgets(input_port, sizeof(input_port), stdin);
-  if (input_port[0] != '\n')
-    port = atoi(input_port);
+  bool have_saved = load_port_config(&port);
+
+  if (have_saved) {
+    printf("using saved port %d (delete the 'port' file to change)\n", port);
+  } else {
+    printf("enter server port (leave blank for 8080): ");
+    char input_port[8] = {0};
+    fgets(input_port, sizeof(input_port), stdin);
+    if (input_port[0] != '\n')
+      port = atoi(input_port);
+  }
 
   addr.sin6_family = AF_INET6;
   addr.sin6_addr = in6addr_any;
@@ -307,6 +334,9 @@ int main() {
   }
 
   printf("listening on port %d\n", port);
+
+  if (!have_saved)
+    save_port_config(port);
 
   while (1) {
     if ((client_fd = accept(server_fd, (struct sockaddr *)&addr, &addrlen)) <
