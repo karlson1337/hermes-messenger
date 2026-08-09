@@ -21,6 +21,12 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 
 ---
 
+## Try Hermes (Debian/Ubuntu or derivatives only)
+
+```bash
+curl -sL https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_depreciated/hermes_client_installer.sh | bash
+```
+
 ## Dependencies
 
 | Library | Purpose |
