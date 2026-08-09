@@ -47,7 +47,7 @@ brew install libsodium sqlcipher ncurses
 
 ## Building
 
-Install clang or gcc, then set `CXX` and `CC` in Makefile (clang++ and clang by default).
+Install clang or gcc, then set `CXX` and `CC` in Makefile (g++ and gcc by default).
 
 Run from repository root
 

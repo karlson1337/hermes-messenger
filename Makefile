@@ -1,5 +1,5 @@
-CXX = clang++
-CC = clang
+CXX = g++
+CC = gcc
 
 all:
 	mkdir -p bin/client
