@@ -37,7 +37,7 @@ make linux
 mv bin/client/hermes-client ../
 cd ..
 
-curl -L -O https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_depreciated/server_pk.key
+curl -L -O https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_deprecated/server_pk.key
 mkdir -p ~/.config/hermes/
 mv server_pk.key ~/.config/hermes/
 echo "hermes.karlson1337.me 8080" > ~/.config/hermes/host
