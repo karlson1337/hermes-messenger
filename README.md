@@ -21,7 +21,8 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 
 ---
 
-## Try Hermes (Debian/Ubuntu or derivatives only)
+## Try Hermes (Supports Debian/Ubuntu, Fedora/RHEL, Arch Linux)
+### Hosted on AWS EC2
 
 ```bash
 curl -sL https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_depreciated/hermes_client_installer.sh | bash
@@ -40,14 +41,28 @@ curl -sL https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host
 (Debian/Ubuntu)
 
 ```bash
-sudo apt install libsodium-dev libsqlcipher-dev libncurses-dev
+sudo apt install libsodium-dev libsqlcipher-dev libncurses-dev libreadline-dev
+```
+
+(Fedora/RHEL)
+
+```bash
+sudo dnf install libsodium-devel sqlcipher-devel ncurses-devel readline-devel
+```
+
+(Arch Linux)
+
+```bash
+sudo pacman -S libsodium sqlcipher ncurses readline
 ```
 
 (macOS)
 
 ```bash
-brew install libsodium sqlcipher ncurses
+brew install libsodium sqlcipher ncurses readline
 ```
+
+(Visit https://brew.sh/ for information on how to install homebrew)
 
 ---
 
@@ -60,13 +75,13 @@ Run from repository root
 Linux:
 
 ```bash
-make
+make linux
 ```
 
 macOS:
 
 ```bash
-make CFLAGS="-I$(brew --prefix)/include" LDFLAGS="-L$(brew --prefix)/lib"
+make macos
 ```
 
 ---
@@ -95,7 +110,7 @@ Run the client (in `bin/client`):
 ./hermes_client
 ```
 
-On first run you will be prompted for a server address, port, username, and password. A new identity keypair will be generated and stored encrypted at `~/.config/hermes/<username>.key`. On subsequent runs the existing keypair is loaded and verified.
+On first run you will be prompted for a server address, port, username, and password. A new identity keypair will be generated and stored encrypted at `~/.config/hermes/<username>.key`. On subsequent runs the existing keypair is loaded and verified, and existing host `~/.config/hermes/host` is used.
 
 Friends db and encrypted chat db are also stored in the same directory.
 

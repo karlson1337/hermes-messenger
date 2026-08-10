@@ -411,8 +411,6 @@ int main() {
   setsockopt(sock, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
   setsockopt(sock, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval));
   setsockopt(sock, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(count));
-#elif defined(__APPLE__) || defined(__unix__)
-  setsockopt(sock, IPPROTO_TCP, TCP_KEEPALIVE, &idle, sizeof(idle));
 #endif
 
   if (!load_server_pk(server_pk)) {
