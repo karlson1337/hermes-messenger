@@ -25,7 +25,7 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 ### Hosted on AWS EC2
 
 ```bash
-curl -sL https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_depreciated/hermes_client_installer.sh | bash
+curl -sL https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_deprecated/hermes_client_installer.sh | bash
 ```
 
 ## Dependencies
