@@ -6,7 +6,7 @@ if [ -d "hermes-messenger/bin/server/" ]; then
   killall hermes_server
   ./hermes_server &
 else
-  git clone -b depreciated --single-branch https://github.com/karlson1337/hermes-messenger
+  git clone -b deprecated --single-branch https://github.com/karlson1337/hermes-messenger
   cd hermes-messenger
   make clean
   make
