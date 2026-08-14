@@ -34,12 +34,12 @@ echo "Installing Hermes client"
 git clone -b deprecated --single-branch https://github.com/karlson1337/hermes-messenger
 cd hermes-messenger
 make linux
-mv bin/client/hermes-client ../
+mv bin/client/hermes_client ../
 cd ..
 
 curl -L -O https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_deprecated/server_pk.key
 mkdir -p ~/.config/hermes/
 mv server_pk.key ~/.config/hermes/
 echo "hermes.karlson1337.me 8080" > ~/.config/hermes/host
-chmod +x hermes-client
-./hermes-client
+chmod +x hermes_client
+./hermes_client
