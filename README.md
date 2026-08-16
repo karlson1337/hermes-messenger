@@ -28,6 +28,9 @@ A secure, end-to-end encrypted terminal messenger written in C/C++.
 curl -sL https://raw.githubusercontent.com/karlson1337/hermes-messenger/aws_host_scripts_deprecated/hermes_client_installer.sh | bash
 ```
 
+### Privacy Notice for above:
+No data is logged. Only some data is temporarily stored (offline message queues). Server can see metadata (sender and receiver usernames, timestamp) but this info is not logged except for above mentioned offline message queues (temporarily).
+
 ## Dependencies
 
 | Library | Purpose |
